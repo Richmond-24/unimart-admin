@@ -7,7 +7,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
 } from "recharts";
-import { dashboardApi, ordersApi } from "../../services/api";
+import { dashboardApi, ordersApi } from "../../services/api.ts";
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 const Icon = ({ d, size = 18, color = "currentColor" }) => (

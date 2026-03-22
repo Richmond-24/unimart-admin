@@ -2,120 +2,289 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { notificationsApi } from "../services/api";
+import { listingsApi, notificationsApi, dashboardApi } from "../services/api.ts";
 
-// ── Uni-Mart Color Scheme ───────────────────────────────────────────────────
-const COLORS = {
-  primary: '#FF6A00',
-  primaryLight: '#FFF1E6',
-  primaryGradient: 'linear-gradient(135deg, #FF8A3C, #FF6A00)',
-  primaryDark: '#CC5500',
-  primaryDeep: '#B34700',
-  background: '#FFFFFF',
-  surface: '#F8F9FA',
-  cardBg: '#CC5500',
-  cardBgDark: '#B34700',
-  cardBgHover: '#E65C00',
-  text: '#1B1B1F',
-  textLight: '#FFFFFF',
-  subtext: '#6B7280',
-  border: '#EEEEEE',
-  dark: '#232F3E',
-  success: '#10B981',
-  warning: '#F59E0B',
-  error: '#EF4444',
-  sidebarBg: '#FFFFFF',
-  sidebarHover: '#FFF3EC',
-  headerBg: '#FFFFFF',
+// ── Uni-Mart Brand Colors ─────────────────────────────────────────────────────
+const C = {
+  orange:      "#FF6A00",
+  orangeLight: "#FFF1E6",
+  orangeDark:  "#CC5500",
+  white:       "#FFFFFF",
+  surface:     "#F8F9FA",
+  text:        "#1B1B1F",
+  subtext:     "#6B7280",
+  border:      "#EEEEEE",
+  success:     "#10B981",
+  warning:     "#F59E0B",
+  error:       "#EF4444",
 };
 
-// ── Icons ─────────────────────────────────────────────────────────────────────
-const Icon = ({ d, size = 20, className = "" }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-    className={className}>
-    <path d={d} />
-  </svg>
-);
+// ── Professionally Drawn SVG Icons ───────────────────────────────────────────
+// Each icon is hand-crafted with clear, human-readable paths
 
-const IC = {
-  home: "M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z M9 22V12h6v10",
-  box: "M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12",
-  users: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M9 11a4 4 0 100-8 4 4 0 000 8z M23 21v-2a4 4 0 00-3-3.87 M16 3.13a4 4 0 010 7.75",
-  cog: "M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z",
-  logout: "M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4 M16 17l5-5-5-5 M21 12H9",
-  bell: "M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9 M13.73 21a2 2 0 01-3.46 0",
-  search: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0",
-  menu: "M3 12h18 M3 6h18 M3 18h18",
-  chevronRight: "M9 18l6-6-6-6",
-  order: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2 M9 5a2 2 0 002 2h2a2 2 0 002-2 M9 5a2 2 0 012-2h2a2 2 0 012 2",
-  stock: "M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z",
-  user2: "M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2 M12 11a4 4 0 100-8 4 4 0 000 8z",
-  x: "M18 6L6 18 M6 6l12 12",
-};
+function IconHome({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12L12 3l9 9" />
+      <path d="M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9" />
+    </svg>
+  );
+}
 
-const notifTypeIcon = { order: IC.order, stock: IC.stock, user: IC.user2 };
-const notifTypeColor = { order: COLORS.primary, stock: COLORS.warning, user: COLORS.success };
+function IconBox({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="7" width="20" height="14" rx="2" />
+      <path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" />
+      <line x1="12" y1="12" x2="12" y2="17" />
+      <line x1="9.5" y1="14.5" x2="14.5" y2="14.5" />
+    </svg>
+  );
+}
 
-function NotificationDropdown({ onClose }) {
+function IconClock({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="12 7 12 12 15.5 15.5" />
+    </svg>
+  );
+}
+
+function IconUsers({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="7" r="4" />
+      <path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2" />
+      <path d="M16 3.13a4 4 0 010 7.75" />
+      <path d="M21 21v-2a4 4 0 00-3-3.87" />
+    </svg>
+  );
+}
+
+function IconBell({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 01-3.46 0" />
+    </svg>
+  );
+}
+
+function IconSearch({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="7" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
+function IconMenu({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  );
+}
+
+function IconX({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+function IconLogout({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  );
+}
+
+function IconChevronRight({ size = 14, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+}
+
+function IconShoppingBag({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <path d="M16 10a4 4 0 01-8 0" />
+    </svg>
+  );
+}
+
+function IconUser({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+    </svg>
+  );
+}
+
+function IconTag({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" />
+      <line x1="7" y1="7" x2="7.01" y2="7" />
+    </svg>
+  );
+}
+
+function IconCheck({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+// ── Notification Dropdown ─────────────────────────────────────────────────────
+function NotificationDropdown({ onClose, onMarkAll }) {
   const [notifs, setNotifs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    notificationsApi.getAll().then(setNotifs);
+    notificationsApi.getAll()
+      .then(setNotifs)
+      .finally(() => setLoading(false));
   }, []);
 
   const markRead = (id) => {
-    setNotifs((n) => n.map((x) => (x.id === id ? { ...x, read: true } : x)));
-    notificationsApi.markRead(id);
+    setNotifs(n => n.map(x => x.id === id ? { ...x, read: true } : x));
+    notificationsApi.markRead(id); // fire and forget
+  };
+
+  const markAll = () => {
+    setNotifs(n => n.map(x => ({ ...x, read: true })));
+    onMarkAll?.();
+  };
+
+  const typeConfig = {
+    order:   { icon: <IconShoppingBag size={14} />, color: C.orange   },
+    user:    { icon: <IconUser size={14} />,        color: C.success   },
+    product: { icon: <IconTag size={14} />,         color: C.warning   },
   };
 
   return (
-    <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl shadow-xl z-50 overflow-hidden animate-slide-in"
-      style={{ background: COLORS.background, border: `1px solid ${COLORS.border}` }}>
-      <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: COLORS.border }}>
-        <h3 className="font-semibold text-sm" style={{ color: COLORS.text }}>Notifications</h3>
-        <button onClick={onClose} className="transition-colors" style={{ color: COLORS.subtext }}>
-          <Icon d={IC.x} size={15} />
+    <div
+      className="absolute right-0 top-full mt-2 w-80 rounded-2xl shadow-2xl z-50 overflow-hidden"
+      style={{ background: C.white, border: `1px solid ${C.border}` }}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3.5 border-b" style={{ borderColor: C.border }}>
+        <div>
+          <h3 className="font-bold text-sm" style={{ color: C.text }}>Notifications</h3>
+          <p className="text-[11px] mt-0.5" style={{ color: C.subtext }}>
+            {notifs.filter(n => !n.read).length} unread
+          </p>
+        </div>
+        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" style={{ color: C.subtext }}>
+          <IconX size={16} />
         </button>
       </div>
-      <div className="max-h-80 overflow-y-auto">
-        {notifs.map((n) => (
-          <div key={n.id}
-            className={`flex gap-3 px-4 py-3 border-b cursor-pointer transition-colors hover:bg-${COLORS.primaryLight}`}
-            style={{ borderColor: COLORS.border, background: n.read ? 'transparent' : COLORS.primaryLight }}
-            onClick={() => markRead(n.id)}>
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: `${notifTypeColor[n.type]}15` }}>
-              <Icon d={notifTypeIcon[n.type]} size={14} style={{ color: notifTypeColor[n.type] }} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs leading-relaxed" style={{ color: n.read ? COLORS.subtext : COLORS.text }}>
-                {n.message}
-              </p>
-              <p className="text-xs mt-0.5" style={{ color: COLORS.subtext }}>{n.time}</p>
-            </div>
-            {!n.read && <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1" style={{ background: COLORS.primary }} />}
+
+      {/* List */}
+      <div className="max-h-72 overflow-y-auto">
+        {loading ? (
+          <div className="flex items-center justify-center py-10">
+            <div className="w-5 h-5 border-2 border-orange-200 border-t-orange-500 rounded-full animate-spin" />
           </div>
-        ))}
+        ) : notifs.length === 0 ? (
+          <div className="py-10 text-center">
+            <IconBell size={28} color={C.subtext} />
+            <p className="text-sm mt-2" style={{ color: C.subtext }}>No notifications yet</p>
+          </div>
+        ) : notifs.map(n => {
+          const cfg = typeConfig[n.type] || typeConfig.order;
+          return (
+            <button
+              key={n.id}
+              onClick={() => markRead(n.id)}
+              className="w-full flex gap-3 px-4 py-3 border-b text-left transition-colors hover:bg-orange-50"
+              style={{ borderColor: C.border, background: n.read ? "transparent" : "#FFF8F4" }}
+            >
+              <div
+                className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
+                style={{ background: `${cfg.color}18`, color: cfg.color }}
+              >
+                {cfg.icon}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs leading-relaxed" style={{ color: n.read ? C.subtext : C.text }}>
+                  {n.message}
+                </p>
+                <p className="text-[10px] mt-0.5" style={{ color: C.subtext }}>{n.time}</p>
+              </div>
+              {!n.read && (
+                <div className="w-2 h-2 rounded-full flex-shrink-0 mt-2" style={{ background: C.orange }} />
+              )}
+            </button>
+          );
+        })}
       </div>
-      <div className="px-4 py-2.5 text-center border-t" style={{ borderColor: COLORS.border }}>
-        <button className="text-xs transition-colors hover:opacity-80" style={{ color: COLORS.primary }}>
+
+      {/* Footer */}
+      <div className="px-4 py-2.5 border-t flex items-center justify-between" style={{ borderColor: C.border }}>
+        <button onClick={markAll} className="text-xs font-semibold transition-colors hover:opacity-70" style={{ color: C.orange }}>
           Mark all as read
         </button>
+        <span className="text-[10px]" style={{ color: C.subtext }}>{notifs.length} total</span>
       </div>
     </div>
   );
 }
 
+// ── Pending Badge Dot ─────────────────────────────────────────────────────────
+function PendingBadge({ count }) {
+  if (!count) return null;
+  return (
+    <span
+      className="ml-auto text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[20px] text-center"
+      style={{ background: C.orange, color: C.white }}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+// ── Main Layout ───────────────────────────────────────────────────────────────
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
-  const [showNotifs, setShowNotifs] = useState(false);
-  const [unread, setUnread] = useState(3);
-  const [search, setSearch] = useState("");
+
+  const [sidebarOpen, setSidebarOpen]   = useState(false);
+  const [collapsed, setCollapsed]       = useState(false);
+  const [showNotifs, setShowNotifs]     = useState(false);
+  const [unreadCount, setUnreadCount]   = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [search, setSearch]             = useState("");
+
   const notifRef = useRef(null);
 
+  // Fetch initial unread notification count
+  useEffect(() => {
+    notificationsApi.getUnreadCount()
+      .then(setUnreadCount)
+      .catch(() => setUnreadCount(0));
+  }, []);
+
+  // Close notifications on outside click
   useEffect(() => {
     const handler = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target)) {
@@ -126,9 +295,21 @@ export default function Layout() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
+
+  // Fetch live pending count for sidebar badge
+  useEffect(() => {
+    listingsApi.getPendingCount()
+      .then(setPendingCount)
+      .catch(() => setPendingCount(0));
+  }, []);
+
   const handleNotifToggle = () => {
-    setShowNotifs(!showNotifs);
-    if (!showNotifs) setUnread(0);
+    setShowNotifs(v => !v);
+    if (!showNotifs) setUnreadCount(0);
   };
 
   const handleLogout = () => {
@@ -136,221 +317,633 @@ export default function Layout() {
     navigate("/login");
   };
 
-  // Updated navItems with new Listings route
+  // Navigation items — no Listings, no Settings
   const navItems = [
-    { path: "/", label: "Dashboard", icon: IC.home, exact: true },
-    { path: "/products", label: "Products", icon: IC.box },
-    { path: "/products/listings", label: "Listings", icon: IC.order }, // New listings page
-    { path: "/products/pending", label: "Pending", icon: IC.order },
-    { path: "/users", label: "Users", icon: IC.users },
-    { path: "/settings", label: "Settings", icon: IC.cog },
+    { path: "/",               label: "Dashboard",       Icon: IconHome,  exact: true },
+    { path: "/products",       label: "Products",        Icon: IconBox                },
+    { path: "/products/pending", label: "Pending Approval", Icon: IconClock, badge: pendingCount },
+    { path: "/users",          label: "Users",           Icon: IconUsers              },
   ];
 
   const isActive = (path, exact) => {
     if (exact) return location.pathname === path;
-    return location.pathname.startsWith(path);
+    return location.pathname === path || location.pathname.startsWith(path + "/");
   };
 
-  // Updated titles with new Listings title
-  const titles = { 
-    "/": "Dashboard", 
-    "/products": "Products", 
-    "/products/listings": "Product Listings", // New title
-    "/products/pending": "Pending Approvals",
-    "/users": "Users", 
-    "/settings": "Settings" 
+  const pageTitles = {
+    "/":                  "Dashboard",
+    "/products":          "Products",
+    "/products/pending":  "Pending Approvals",
+    "/users":             "Users",
   };
-  
-  const currentTitle = titles[location.pathname] || "Dashboard";
+  const currentTitle = pageTitles[location.pathname] || "Dashboard";
 
-  const breadcrumbs = () => {
-    const parts = location.pathname.split("/").filter(Boolean);
-    if (parts.length === 0) return null;
-    return (
-      <div className="flex items-center gap-1.5 text-xs mt-0.5" style={{ color: COLORS.subtext }}>
-        <span>Uni-Mart</span>
-        {parts.map((p, i) => (
-          <React.Fragment key={i}>
-            <Icon d={IC.chevronRight} size={10} />
-            <span className="capitalize" style={{ color: i === parts.length - 1 ? COLORS.primary : COLORS.subtext }}>
-              {p}
-            </span>
-          </React.Fragment>
-        ))}
+  const breadcrumbs = location.pathname.split("/").filter(Boolean);
+
+  // ── Sidebar content (shared between desktop + mobile drawer) ────────────────
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full">
+      {/* Brand */}
+      <div
+        className="flex items-center gap-3 px-4 py-5 border-b flex-shrink-0"
+        style={{ borderColor: C.border }}
+      >
+        <div
+          className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-base flex-shrink-0"
+          style={{ background: `linear-gradient(135deg, #FF8A3C, ${C.orange})` }}
+        >
+          U
+        </div>
+        {(!collapsed || sidebarOpen) && (
+          <div className="flex-1 min-w-0">
+            <span className="font-black text-base tracking-tight block" style={{ color: C.text }}>Uni-Mart</span>
+            <span className="text-[10px] font-semibold" style={{ color: C.subtext }}>Admin Panel</span>
+          </div>
+        )}
+        {/* Collapse toggle — desktop only */}
+        <button
+          onClick={() => setCollapsed(v => !v)}
+          className="hidden lg:flex p-1.5 rounded-lg transition-colors hover:bg-orange-50 ml-auto flex-shrink-0"
+          style={{ color: C.subtext }}
+        >
+          <IconMenu size={16} />
+        </button>
+        {/* Close drawer — mobile only */}
+        <button
+          onClick={() => setSidebarOpen(false)}
+          className="lg:hidden p-1.5 rounded-lg transition-colors hover:bg-orange-50 ml-auto flex-shrink-0"
+          style={{ color: C.subtext }}
+        >
+          <IconX size={18} />
+        </button>
       </div>
-    );
-  };
+
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto">
+        {(!collapsed || sidebarOpen) && (
+          <p
+            className="text-[10px] uppercase tracking-[0.12em] px-3 mb-3 font-black"
+            style={{ color: C.subtext }}
+          >
+            Main Menu
+          </p>
+        )}
+        {navItems.map(({ path, label, Icon: NavIcon, exact, badge }) => {
+          const active = isActive(path, exact);
+          const showLabel = !collapsed || sidebarOpen;
+          return (
+            <NavLink
+              key={path}
+              to={path}
+              end={exact}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 relative group"
+              style={({ isActive: navActive }) => ({
+                background: (navActive || active) ? C.orangeLight : "transparent",
+                color:      (navActive || active) ? C.orange : C.text,
+                justifyContent: !showLabel ? "center" : "flex-start",
+              })}
+            >
+              <NavIcon size={18} color={(isActive(path, exact)) ? C.orange : C.text} />
+              {showLabel && (
+                <>
+                  <span className="text-sm font-semibold flex-1">{label}</span>
+                  {badge > 0 && <PendingBadge count={badge} />}
+                  {active && !badge && (
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: C.orange }} />
+                  )}
+                </>
+              )}
+              {/* Tooltip when collapsed on desktop */}
+              {!showLabel && (
+                <div
+                  className="absolute left-full ml-3 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap z-50 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg"
+                  style={{ background: C.text, color: C.white }}
+                >
+                  {label}
+                  {badge > 0 && ` (${badge})`}
+                </div>
+              )}
+            </NavLink>
+          );
+        })}
+      </nav>
+
+      {/* User Footer */}
+      <div className="px-3 py-3 border-t flex-shrink-0" style={{ borderColor: C.border }}>
+        {(!collapsed || sidebarOpen) ? (
+          <div
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+            style={{ background: C.surface }}
+          >
+            <div
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-black flex-shrink-0"
+              style={{ background: `linear-gradient(135deg, #FF8A3C, ${C.orange})` }}
+            >
+              {user?.name?.charAt(0)?.toUpperCase() || "A"}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold truncate" style={{ color: C.text }}>{user?.name || "Admin"}</p>
+              <p className="text-[10px] truncate" style={{ color: C.subtext }}>Administrator</p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="p-1.5 rounded-lg transition-colors hover:bg-red-50"
+              style={{ color: C.subtext }}
+              title="Sign out"
+            >
+              <IconLogout size={15} color={C.subtext} />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleLogout}
+            className="w-full flex justify-center p-2.5 rounded-xl transition-colors hover:bg-red-50"
+            style={{ color: C.subtext }}
+            title="Sign out"
+          >
+            <IconLogout size={18} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: COLORS.surface }}>
-      {/* ── Sidebar ── */}
+    <div className="flex h-screen overflow-hidden" style={{ background: C.surface }}>
+
+      {/* ── Mobile Sidebar Overlay ─────────────────────────────────────────── */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* ── Sidebar — Desktop (collapsible) ───────────────────────────────── */}
       <aside
-        className="h-screen flex flex-col border-r transition-all duration-300 flex-shrink-0"
-        style={{ 
-          background: COLORS.background, 
-          borderColor: COLORS.border,
-          width: collapsed ? 80 : 260 
-        }}>
-        
-        {/* Brand */}
-        <div className="flex items-center gap-3 px-4 py-5 border-b" style={{ borderColor: COLORS.border }}>
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold flex-shrink-0"
-            style={{ background: COLORS.primaryGradient }}>
-            U
-          </div>
-          {!collapsed && (
-            <span className="font-bold text-lg tracking-tight flex-1" style={{ color: COLORS.text }}>
-              Uni-Mart
-            </span>
-          )}
-          <button onClick={() => setCollapsed(!collapsed)}
-            className="transition-colors ml-auto p-1 rounded-lg hover:bg-opacity-10"
-            style={{ color: COLORS.subtext, hover: { background: COLORS.primaryLight } }}>
-            <Icon d={IC.menu} size={16} />
-          </button>
-        </div>
-
-        {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {!collapsed && (
-            <p className="text-xs uppercase tracking-widest px-3 mb-3 font-semibold" style={{ color: COLORS.subtext }}>
-              Main Menu
-            </p>
-          )}
-          {navItems.map((item) => {
-            const active = isActive(item.path, item.exact);
-            return (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className={({ isActive: navIsActive }) =>
-                  `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative
-                  ${(navIsActive || active) ? 'font-medium' : ''}`
-                }
-                style={({ isActive: navIsActive }) => ({
-                  background: (navIsActive || active) ? COLORS.primaryLight : 'transparent',
-                  color: (navIsActive || active) ? COLORS.primary : COLORS.text,
-                  justifyContent: collapsed ? 'center' : 'flex-start',
-                })}
-                end={item.exact}>
-                <Icon d={item.icon} size={18} className="flex-shrink-0" />
-                {!collapsed && <span className="text-sm">{item.label}</span>}
-                {!collapsed && active && (
-                  <span className="ml-auto w-1.5 h-1.5 rounded-full" style={{ background: COLORS.primary }} />
-                )}
-                {collapsed && (
-                  <div className="absolute left-full ml-2 px-2.5 py-1.5 rounded-lg text-xs whitespace-nowrap z-50
-                    opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg"
-                    style={{ 
-                      background: COLORS.background, 
-                      color: COLORS.text,
-                      border: `1px solid ${COLORS.border}` 
-                    }}>
-                    {item.label}
-                  </div>
-                )}
-              </NavLink>
-            );
-          })}
-        </nav>
-
-        {/* User Footer */}
-        <div className="px-3 py-3 border-t" style={{ borderColor: COLORS.border }}>
-          {!collapsed ? (
-            <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors hover:bg-opacity-50"
-              style={{ background: COLORS.surface }}>
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                style={{ background: COLORS.primaryGradient }}>
-                {user?.name?.charAt(0) || 'A'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold truncate" style={{ color: COLORS.text }}>{user?.name || 'Admin'}</p>
-                <p className="text-xs truncate" style={{ color: COLORS.subtext }}>Administrator</p>
-              </div>
-              <button onClick={handleLogout}
-                className="transition-colors p-1 rounded-lg hover:bg-opacity-10"
-                style={{ color: COLORS.subtext, hover: { color: COLORS.error } }}
-                title="Logout">
-                <Icon d={IC.logout} size={15} />
-              </button>
-            </div>
-          ) : (
-            <button onClick={handleLogout}
-              className="w-full flex justify-center p-2.5 rounded-xl transition-colors"
-              style={{ color: COLORS.subtext, hover: { color: COLORS.error, background: `${COLORS.error}10` } }}
-              title="Logout">
-              <Icon d={IC.logout} size={18} />
-            </button>
-          )}
-        </div>
+        className="hidden lg:flex flex-col h-screen border-r flex-shrink-0 transition-all duration-300"
+        style={{
+          background:   C.white,
+          borderColor:  C.border,
+          width:        collapsed ? 72 : 248,
+        }}
+      >
+        <SidebarContent />
       </aside>
 
-      {/* ── Main Content ── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* ── Sidebar — Mobile (drawer) ──────────────────────────────────────── */}
+      <aside
+        className="fixed top-0 left-0 z-50 h-full flex flex-col lg:hidden border-r transition-transform duration-300"
+        style={{
+          background:  C.white,
+          borderColor: C.border,
+          width:       280,
+          transform:   sidebarOpen ? "translateX(0)" : "translateX(-100%)",
+        }}
+      >
+        <SidebarContent />
+      </aside>
+
+      {/* ── Main Content ──────────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+
         {/* Header */}
-        <header className="flex items-center gap-4 px-6 py-4 border-b flex-shrink-0"
-          style={{ background: COLORS.background, borderColor: COLORS.border }}>
-          
-          <div>
-            <h1 className="text-xl font-bold" style={{ color: COLORS.text }}>{currentTitle}</h1>
-            {breadcrumbs()}
+        <header
+          className="flex items-center gap-3 px-4 sm:px-6 py-3.5 border-b flex-shrink-0"
+          style={{ background: C.white, borderColor: C.border }}
+        >
+          {/* Mobile hamburger */}
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="lg:hidden p-2 rounded-xl transition-colors hover:bg-orange-50 flex-shrink-0"
+            style={{ color: C.subtext }}
+          >
+            <IconMenu size={20} />
+          </button>
+
+          {/* Title + Breadcrumb */}
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl font-black truncate" style={{ color: C.text }}>
+              {currentTitle}
+            </h1>
+            {breadcrumbs.length > 0 && (
+              <div className="flex items-center gap-1 text-[11px] mt-0.5 flex-wrap" style={{ color: C.subtext }}>
+                <span>Home</span>
+                {breadcrumbs.map((p, i) => (
+                  <React.Fragment key={i}>
+                    <IconChevronRight size={10} color={C.subtext} />
+                    <span
+                      className="capitalize"
+                      style={{ color: i === breadcrumbs.length - 1 ? C.orange : C.subtext }}
+                    >
+                      {p.replace("-", " ")}
+                    </span>
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Search */}
-          <div className="flex-1 max-w-xs ml-4">
-            <div className="flex items-center gap-2 border rounded-xl px-3 py-2 transition-colors focus-within:ring-2 focus-within:ring-opacity-20"
-              style={{ 
-                borderColor: COLORS.border, 
-                background: COLORS.surface,
-                ring: COLORS.primary
-              }}>
-              <Icon d={IC.search} size={15} style={{ color: COLORS.subtext }} />
+          {/* Search — hidden on very small screens */}
+          <div className="hidden sm:flex flex-1 max-w-xs ml-2">
+            <div
+              className="flex items-center gap-2 border rounded-xl px-3 py-2 w-full transition-colors focus-within:border-orange-300"
+              style={{ borderColor: C.border, background: C.surface }}
+            >
+              <IconSearch size={15} color={C.subtext} />
               <input
-                className="bg-transparent text-sm placeholder-transparent focus:outline-none flex-1"
-                style={{ color: COLORS.text }}
+                className="bg-transparent text-sm placeholder-gray-400 focus:outline-none flex-1 min-w-0"
+                style={{ color: C.text }}
                 placeholder="Search..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={e => setSearch(e.target.value)}
               />
             </div>
           </div>
 
-          <div className="ml-auto flex items-center gap-3">
-            {/* Notifications */}
+          {/* Right actions */}
+          <div className="ml-auto flex items-center gap-2 sm:gap-3 flex-shrink-0">
+
+            {/* Notification Bell */}
             <div className="relative" ref={notifRef}>
               <button
                 onClick={handleNotifToggle}
-                className="relative p-2.5 rounded-xl transition-all"
-                style={{ background: COLORS.surface, color: COLORS.subtext }}>
-                <Icon d={IC.bell} size={18} />
-                {unread > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-xs text-white flex items-center justify-center font-bold"
-                    style={{ background: COLORS.primary }}>
-                    {unread}
+                className="relative p-2.5 rounded-xl transition-colors hover:bg-orange-50"
+                style={{ color: C.subtext }}
+                aria-label="Notifications"
+              >
+                <IconBell size={20} />
+                {unreadCount > 0 && (
+                  <span
+                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[10px] text-white flex items-center justify-center font-black"
+                    style={{ background: C.orange }}
+                  >
+                    {unreadCount}
                   </span>
                 )}
               </button>
-              {showNotifs && <NotificationDropdown onClose={() => setShowNotifs(false)} />}
+              {showNotifs && (
+                <NotificationDropdown
+                  onClose={() => setShowNotifs(false)}
+                  onMarkAll={() => setUnreadCount(0)}
+                />
+              )}
             </div>
 
-            {/* User Avatar */}
-            <div className="flex items-center gap-2 pl-2 ml-1 border-l" style={{ borderColor: COLORS.border }}>
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold"
-                style={{ background: COLORS.primaryGradient }}>
-                {user?.name?.charAt(0) || 'A'}
+            {/* User avatar */}
+            <div
+              className="flex items-center gap-2 pl-2 ml-1 border-l"
+              style={{ borderColor: C.border }}
+            >
+              <div
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-black flex-shrink-0"
+                style={{ background: `linear-gradient(135deg, #FF8A3C, ${C.orange})` }}
+              >
+                {user?.name?.charAt(0)?.toUpperCase() || "A"}
               </div>
               <div className="hidden md:block">
-                <p className="text-xs font-semibold leading-tight" style={{ color: COLORS.text }}>{user?.name || 'Admin'}</p>
-                <p className="text-xs" style={{ color: COLORS.subtext }}>Administrator</p>
+                <p className="text-xs font-bold leading-tight" style={{ color: C.text }}>
+                  {user?.name || "Admin"}
+                </p>
+                <p className="text-[10px]" style={{ color: C.subtext }}>Administrator</p>
               </div>
             </div>
           </div>
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-6" style={{ background: COLORS.surface }}>
+        <main
+          className="flex-1 overflow-y-auto p-4 sm:p-6"
+          style={{ background: C.surface }}
+        >
           <Outlet />
         </main>
+      </div>
+    </div>
+  );
+}
+
+// ── Pending Approvals Page ────────────────────────────────────────────────────
+// Drop this in /pages/PendingApprovals.tsx or wherever your router expects it.
+// It connects to your existing products API — replace the fetch logic with your real endpoint.
+
+export function PendingApprovalsPage() {
+  const [items, setItems]       = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [selected, setSelected] = useState(null);
+  const [filter, setFilter]     = useState("all");
+  const [actionLoading, setActionLoading] = useState(null);
+
+  const loadPending = () => {
+    setLoading(true);
+    listingsApi.getPending()
+      .then(setItems)
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadPending();
+  }, []);
+
+  const filtered = items.filter(item => {
+    if (filter === "all") return true;
+    const d = new Date(item.createdAt);
+    const now = new Date();
+    if (filter === "today") return d.toDateString() === now.toDateString();
+    if (filter === "week")  return (now.getTime() - d.getTime()) < 7 * 86400000;
+    return true;
+  });
+
+  const approve = async (id) => {
+    setActionLoading(id + "_approve");
+    try {
+      await listingsApi.approve(id);
+      setItems(p => p.filter(x => x._id !== id));
+      if (selected?._id === id) setSelected(null);
+    } catch (err) {
+      console.error("Approve failed:", err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const reject = async (id) => {
+    setActionLoading(id + "_reject");
+    try {
+      await listingsApi.reject(id);
+      setItems(p => p.filter(x => x._id !== id));
+      if (selected?._id === id) setSelected(null);
+    } catch (err) {
+      console.error("Reject failed:", err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const StatusBadge = ({ label, color }) => (
+    <span
+      className="inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-1 rounded-full"
+      style={{ background: `${color}18`, color }}
+    >
+      {label}
+    </span>
+  );
+
+  return (
+    <div className="space-y-5 max-w-full">
+
+      {/* Page header row */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+        <div>
+          <h2 className="text-xl font-black" style={{ color: C.text }}>Pending Approvals</h2>
+          <p className="text-sm mt-0.5" style={{ color: C.subtext }}>
+            {loading ? "Loading…" : `${filtered.length} item${filtered.length !== 1 ? "s" : ""} waiting for review`}
+          </p>
+        </div>
+        {/* Filter pills */}
+        <div className="flex gap-2 flex-wrap">
+          {["all", "today", "week"].map(f => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className="px-4 py-1.5 rounded-xl text-xs font-bold capitalize transition-colors"
+              style={{
+                background: filter === f ? C.orange : C.surface,
+                color:      filter === f ? C.white  : C.subtext,
+                border:     `1px solid ${filter === f ? C.orange : C.border}`,
+              }}
+            >
+              {f === "all" ? "All time" : f === "today" ? "Today" : "This week"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Stats bar */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {[
+          { label: "Pending",  value: items.length,                                   color: C.orange  },
+          { label: "Today",    value: items.filter(i => { const d = new Date(i.createdAt); return d.toDateString() === new Date().toDateString(); }).length, color: C.warning },
+          { label: "This Week",value: items.filter(i => (Date.now() - new Date(i.createdAt).getTime()) < 7*86400000).length, color: C.success },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="bg-white rounded-2xl border p-4 flex items-center gap-3" style={{ borderColor: C.border }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${color}15` }}>
+              <IconClock size={18} color={color} />
+            </div>
+            <div>
+              <p className="text-2xl font-black" style={{ color }}>{value}</p>
+              <p className="text-xs font-semibold" style={{ color: C.subtext }}>{label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Content: list + detail panel */}
+      <div className="flex flex-col lg:flex-row gap-4">
+
+        {/* List */}
+        <div className="flex-1 bg-white rounded-2xl border overflow-hidden" style={{ borderColor: C.border }}>
+          {/* Table header — hidden on mobile */}
+          <div
+            className="hidden sm:grid grid-cols-[1fr_1fr_1fr_auto] gap-4 px-5 py-3 border-b text-[10px] font-black uppercase tracking-widest"
+            style={{ borderColor: C.border, color: C.subtext, background: C.surface }}
+          >
+            <span>Product</span>
+            <span>Seller</span>
+            <span>Submitted</span>
+            <span>Action</span>
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="w-7 h-7 border-2 border-orange-200 border-t-orange-500 rounded-full animate-spin" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center px-6">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: C.orangeLight }}>
+                <IconCheck size={24} color={C.orange} />
+              </div>
+              <p className="font-black text-gray-800 mb-1">All caught up!</p>
+              <p className="text-sm" style={{ color: C.subtext }}>No pending items for this filter.</p>
+            </div>
+          ) : (
+            <div className="divide-y" style={{ borderColor: C.border }}>
+              {filtered.map(item => (
+                <div
+                  key={item._id}
+                  onClick={() => setSelected(item)}
+                  className="flex flex-col sm:grid sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 sm:gap-4 px-5 py-4 cursor-pointer transition-colors hover:bg-orange-50"
+                  style={{ background: selected?._id === item._id ? "#FFF8F4" : undefined }}
+                >
+                  {/* Product */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.title} className="w-10 h-10 rounded-xl object-cover flex-shrink-0 border" style={{ borderColor: C.border }} />
+                    ) : (
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: C.orangeLight }}>
+                        <IconBox size={16} color={C.orange} />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold truncate" style={{ color: C.text }}>{item.title}</p>
+                      <p className="text-xs truncate" style={{ color: C.subtext }}>{item.category}</p>
+                    </div>
+                  </div>
+
+                  {/* Seller */}
+                  <div className="flex items-center gap-2 min-w-0 sm:self-center">
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[11px] font-black flex-shrink-0" style={{ background: C.orange }}>
+                      {item.sellerName?.charAt(0) || "?"}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold truncate" style={{ color: C.text }}>{item.sellerName || "Unknown"}</p>
+                      <p className="text-[10px] truncate" style={{ color: C.subtext }}>{item.sellerEmail}</p>
+                    </div>
+                  </div>
+
+                  {/* Date */}
+                  <div className="sm:self-center">
+                    <p className="text-xs" style={{ color: C.subtext }}>
+                      {item.createdAt ? new Date(item.createdAt).toLocaleDateString("en-GH", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                    </p>
+                    <p className="text-[10px]" style={{ color: C.subtext }}>
+                      {item.createdAt ? new Date(item.createdAt).toLocaleTimeString("en-GH", { hour: "2-digit", minute: "2-digit" }) : ""}
+                    </p>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex gap-2 sm:self-center" onClick={e => e.stopPropagation()}>
+                    <button
+                      onClick={() => approve(item._id)}
+                      disabled={!!actionLoading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors hover:opacity-85 disabled:opacity-50"
+                      style={{ background: `${C.success}15`, color: C.success }}
+                    >
+                      {actionLoading === item._id + "_approve"
+                        ? <span className="w-3 h-3 border border-green-400 border-t-green-600 rounded-full animate-spin" />
+                        : <IconCheck size={13} color={C.success} />
+                      } Approve
+                    </button>
+                    <button
+                      onClick={() => reject(item._id)}
+                      disabled={!!actionLoading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors hover:opacity-85 disabled:opacity-50"
+                      style={{ background: `${C.error}12`, color: C.error }}
+                    >
+                      {actionLoading === item._id + "_reject"
+                        ? <span className="w-3 h-3 border border-red-300 border-t-red-500 rounded-full animate-spin" />
+                        : <IconX size={13} color={C.error} />
+                      } Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Detail panel — slides in when item selected */}
+        {selected && (
+          <div
+            className="w-full lg:w-72 xl:w-80 bg-white rounded-2xl border flex flex-col flex-shrink-0 overflow-hidden"
+            style={{ borderColor: C.border }}
+          >
+            {/* Panel header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: C.border }}>
+              <span className="font-black text-sm" style={{ color: C.text }}>Item Detail</span>
+              <button onClick={() => setSelected(null)} className="p-1 rounded-lg hover:bg-gray-100 transition-colors" style={{ color: C.subtext }}>
+                <IconX size={16} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 space-y-5">
+              {/* Image */}
+              {selected.imageUrl ? (
+                <img src={selected.imageUrl} alt={selected.title} className="w-full h-40 object-cover rounded-xl border" style={{ borderColor: C.border }} />
+              ) : (
+                <div className="w-full h-40 rounded-xl flex items-center justify-center" style={{ background: C.orangeLight }}>
+                  <IconBox size={32} color={C.orange} />
+                </div>
+              )}
+
+              {/* Title & price */}
+              <div>
+                <h3 className="font-black text-base" style={{ color: C.text }}>{selected.title}</h3>
+                <p className="text-xs mt-1" style={{ color: C.subtext }}>{selected.category}</p>
+                <p className="text-2xl font-black mt-2" style={{ color: C.orange }}>GH₵{Number(selected.price || 0).toFixed(2)}</p>
+              </div>
+
+              {/* Details */}
+              <div className="space-y-2.5">
+                {[
+                  { label: "Seller",    value: selected.sellerName  },
+                  { label: "Email",     value: selected.sellerEmail },
+                  { label: "Phone",     value: selected.sellerPhone || "—" },
+                  { label: "Condition", value: selected.condition   },
+                  { label: "Location",  value: selected.location || "—" },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex justify-between gap-3">
+                    <span className="text-xs flex-shrink-0" style={{ color: C.subtext }}>{label}</span>
+                    <span className="text-xs font-semibold text-right truncate" style={{ color: C.text }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Description */}
+              {selected.description && (
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest mb-1.5" style={{ color: C.subtext }}>Description</p>
+                  <p className="text-xs leading-relaxed" style={{ color: C.text }}>{selected.description}</p>
+                </div>
+              )}
+
+              {/* AI scores */}
+              {selected.authenticityScore != null && (
+                <div className="rounded-xl p-3 border space-y-2" style={{ borderColor: C.border, background: C.surface }}>
+                  <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.subtext }}>AI Analysis</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs" style={{ color: C.subtext }}>Authenticity</span>
+                    <span className="text-xs font-black" style={{ color: selected.authenticityScore > 0.7 ? C.success : C.error }}>
+                      {Math.round(selected.authenticityScore * 100)}%
+                    </span>
+                  </div>
+                  {selected.isFake && (
+                    <div className="text-[11px] rounded-lg p-2" style={{ background: `${C.error}12`, color: C.error }}>
+                      ⚠ Fake product detected — {selected.fakeDetectionNotes}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Panel actions */}
+            <div className="px-5 py-4 border-t flex gap-3" style={{ borderColor: C.border }}>
+              <button
+                onClick={() => approve(selected._id)}
+                disabled={!!actionLoading}
+                className="flex-1 py-3 rounded-xl font-black text-sm text-white transition-colors hover:opacity-85 disabled:opacity-50"
+                style={{ background: C.success }}
+              >
+                {actionLoading === selected._id + "_approve"
+                  ? "Approving…"
+                  : "Approve"
+                }
+              </button>
+              <button
+                onClick={() => reject(selected._id)}
+                disabled={!!actionLoading}
+                className="flex-1 py-3 rounded-xl font-black text-sm transition-colors hover:opacity-85 disabled:opacity-50"
+                style={{ background: `${C.error}15`, color: C.error }}
+              >
+                {actionLoading === selected._id + "_reject"
+                  ? "Rejecting…"
+                  : "Reject"
+                }
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
