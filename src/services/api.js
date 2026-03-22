@@ -1,3 +1,6 @@
+
+// /home/richmond/Downloads/unimart-admin (1)/app/unimart-admin/src/services/api.js
+
 // ─── Mock API Service with localStorage persistence ──────────────────────────
 
 const delay = (ms = 300) => new Promise((r) => setTimeout(r, ms));
@@ -68,6 +71,25 @@ const setStore = (key, data) => {
 
 const nextId = (items) =>
   items.length > 0 ? Math.max(...items.map((i) => Number(i.id) || 0)) + 1 : 1;
+
+// Helper function for date formatting
+const formatDate = (date, formatStr) => {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  
+  const d = date.getDate();
+  const m = months[date.getMonth()];
+  const y = date.getFullYear();
+  const hh = date.getHours().toString().padStart(2, '0');
+  const mm = date.getMinutes().toString().padStart(2, '0');
+  const day = days[date.getDay()];
+  
+  return formatStr
+    .replace('HH:mm', `${hh}:${mm}`)
+    .replace('EEE', day)
+    .replace('MMM dd', `${m} ${d}`)
+    .replace('MMM yyyy', `${m} ${y}`);
+};
 
 // ── Products API ──────────────────────────────────────────────────────────────
 
@@ -255,16 +277,311 @@ export const ordersApi = {
     setStore("unimart_orders", data);
     return data[idx];
   },
+
+  getRecent: async (limit = 5) => {
+    await delay(150);
+    const data = getStore("unimart_orders", SEED_ORDERS);
+    return data
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, limit);
+  },
 };
 
-// ── Dashboard API ─────────────────────────────────────────────────────────────
+// ── Dashboard API (Fully implemented) ─────────────────────────────────────────
 
 export const dashboardApi = {
+  // Get KPI data
+  getKPI: async (timeRange) => {
+    await delay(300);
+    const products = getStore("unimart_products", SEED_PRODUCTS);
+    const orders = getStore("unimart_orders", SEED_ORDERS);
+    const users = getStore("unimart_users", SEED_USERS);
+    
+    // Calculate real data from stores
+    const totalRevenue = orders.reduce((sum, order) => sum + order.amount, 0);
+    const totalOrders = orders.length;
+    const totalCustomers = users.length + 12533;
+    
+    // Mock trends based on timeRange
+    const trends = {
+      '24h': { revenue: 12.5, orders: 8.2, customers: 15.3, conversion: 2.1, aov: -1.5 },
+      '7d': { revenue: 8.7, orders: 5.4, customers: 10.2, conversion: 1.8, aov: 2.3 },
+      '30d': { revenue: 15.2, orders: 11.8, customers: 22.5, conversion: 3.2, aov: 4.1 },
+      '90d': { revenue: 24.6, orders: 18.3, customers: 35.7, conversion: 5.4, aov: 6.8 },
+      '1y': { revenue: 42.1, orders: 31.5, customers: 58.2, conversion: 7.6, aov: 9.3 },
+    };
+
+    const trend = trends[timeRange] || trends['30d'];
+
+    return {
+      revenue: totalRevenue,
+      revenueTrend: trend.revenue,
+      orders: totalOrders,
+      ordersTrend: trend.orders,
+      customers: totalCustomers,
+      customersTrend: trend.customers,
+      conversionRate: 3.8,
+      conversionTrend: trend.conversion,
+      aov: Math.round(totalRevenue / totalOrders) || 362,
+      aovTrend: trend.aov,
+    };
+  },
+
+  // Get sales trend data
+  getSalesTrend: async (timeRange) => {
+    await delay(200);
+    const orders = getStore("unimart_orders", SEED_ORDERS);
+    
+    let days = 30;
+    let formatStr = 'MMM dd';
+    
+    switch(timeRange) {
+      case '24h':
+        days = 1;
+        formatStr = 'HH:mm';
+        break;
+      case '7d':
+        days = 7;
+        formatStr = 'EEE';
+        break;
+      case '30d':
+        days = 30;
+        formatStr = 'MMM dd';
+        break;
+      case '90d':
+        days = 90;
+        formatStr = 'MMM dd';
+        break;
+      case '1y':
+        days = 365;
+        formatStr = 'MMM yyyy';
+        break;
+      default:
+        days = 30;
+        formatStr = 'MMM dd';
+    }
+
+    const data = [];
+    const now = new Date();
+    
+    // Group orders by date
+    const ordersByDate = {};
+    orders.forEach(order => {
+      if (!ordersByDate[order.date]) {
+        ordersByDate[order.date] = {
+          revenue: 0,
+          count: 0
+        };
+      }
+      ordersByDate[order.date].revenue += order.amount;
+      ordersByDate[order.date].count += 1;
+    });
+    
+    for (let i = days; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      
+      const dateStr = date.toISOString().split('T')[0];
+      const dayData = ordersByDate[dateStr] || { revenue: 0, count: 0 };
+      
+      // If no data for this date, generate random data for demo
+      const revenue = dayData.revenue || Math.floor(Math.random() * 50000) + 20000;
+      const orderCount = dayData.count || Math.floor(Math.random() * 150) + 50;
+      
+      data.push({
+        date: formatDate(date, formatStr),
+        revenue: revenue,
+        orders: orderCount,
+      });
+    }
+    
+    return data;
+  },
+
+  // Get category performance
+  getCategoryPerformance: async (timeRange) => {
+    await delay(150);
+    const products = getStore("unimart_products", SEED_PRODUCTS);
+    const orders = getStore("unimart_orders", SEED_ORDERS);
+    
+    // Calculate category sales
+    const categoryMap = new Map();
+    
+    orders.forEach(order => {
+      const product = products.find(p => p.id === order.productId);
+      if (product) {
+        const cat = product.category;
+        const current = categoryMap.get(cat) || 0;
+        categoryMap.set(cat, current + order.amount);
+      }
+    });
+    
+    // If no real data, use mock
+    if (categoryMap.size === 0) {
+      return [
+        { name: 'Electronics', value: 450000 },
+        { name: 'Fashion', value: 380000 },
+        { name: 'Books', value: 210000 },
+        { name: 'Home & Furniture', value: 320000 },
+        { name: 'Other', value: 120000 },
+      ];
+    }
+    
+    return Array.from(categoryMap.entries()).map(([name, value]) => ({
+      name,
+      value,
+    }));
+  },
+
+  // Get top products
+  getTopProducts: async (timeRange) => {
+    await delay(150);
+    const products = getStore("unimart_products", SEED_PRODUCTS);
+    const orders = getStore("unimart_orders", SEED_ORDERS);
+    
+    // Calculate product sales
+    const productSales = new Map();
+    
+    orders.forEach(order => {
+      const productId = order.productId;
+      const current = productSales.get(productId) || { revenue: 0, count: 0 };
+      productSales.set(productId, {
+        revenue: current.revenue + order.amount,
+        count: current.count + 1,
+      });
+    });
+    
+    // Map to products
+    const topProducts = products
+      .map(product => {
+        const sales = productSales.get(product.id) || { revenue: 0, count: 0 };
+        return {
+          id: product.id,
+          name: product.name,
+          category: product.category,
+          revenue: sales.revenue || product.price * product.sales,
+          sold: sales.count || product.sales,
+          image: product.image,
+        };
+      })
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+    
+    return topProducts.length ? topProducts : [
+      { id: 1, name: 'iPhone 14 Pro', category: 'Electronics', revenue: 245000, sold: 42, image: '📱' },
+      { id: 2, name: 'Nike Air Max', category: 'Fashion', revenue: 189000, sold: 156, image: '👟' },
+      { id: 3, name: 'MacBook Pro', category: 'Electronics', revenue: 168000, sold: 18, image: '💻' },
+      { id: 4, name: 'Harry Potter Box Set', category: 'Books', revenue: 89000, sold: 234, image: '📚' },
+      { id: 5, name: 'Samsung TV 65"', category: 'Electronics', revenue: 76000, sold: 8, image: '📺' },
+    ];
+  },
+
+  // Get user activity
+  getUserActivity: async (timeRange) => {
+    await delay(150);
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return days.map(day => ({
+      day,
+      visitors: Math.floor(Math.random() * 1000) + 500,
+      pageViews: Math.floor(Math.random() * 3000) + 1000,
+    }));
+  },
+
+  // Get geographic distribution
+  getGeoDistribution: async (timeRange) => {
+    await delay(150);
+    return [
+      { name: 'Accra', percentage: 35 },
+      { name: 'Kumasi', percentage: 25 },
+      { name: 'Takoradi', percentage: 15 },
+      { name: 'Tamale', percentage: 12 },
+      { name: 'Cape Coast', percentage: 8 },
+      { name: 'Other', percentage: 5 },
+    ];
+  },
+
+  // Get inventory alerts
+  getInventoryAlerts: async () => {
+    await delay(150);
+    const products = getStore("unimart_products", SEED_PRODUCTS);
+    
+    const alerts = products
+      .filter(p => p.stock < 10 || p.status === 'Low Stock' || p.status === 'Out of Stock')
+      .map(p => ({
+        id: p.id,
+        product: p.name,
+        sku: p.sku,
+        stock: p.stock,
+        threshold: 10,
+      }))
+      .slice(0, 5);
+    
+    return alerts.length ? alerts : [
+      { id: 1, product: 'iPhone 14 Pro', sku: 'IP14P-256', stock: 3, threshold: 10 },
+      { id: 2, product: 'Nike Air Max', sku: 'NK-AM-42', stock: 5, threshold: 20 },
+      { id: 3, product: 'MacBook Pro M2', sku: 'MBP-M2-512', stock: 2, threshold: 5 },
+      { id: 4, product: 'Wireless Headphones', sku: 'WH-1000', stock: 8, threshold: 15 },
+    ];
+  },
+
+  // Get recent orders
+  getRecentOrders: async () => {
+    await delay(150);
+    const orders = getStore("unimart_orders", SEED_ORDERS);
+    
+    const recentOrders = orders
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 5)
+      .map(o => ({
+        id: o.id,
+        orderNumber: o.id,
+        customer: o.customer,
+        amount: o.amount,
+        status: o.status.toLowerCase(),
+      }));
+    
+    return recentOrders.length ? recentOrders : [
+      { id: 'UM-4821', orderNumber: 'UM-4821', customer: 'John Doe', amount: 1250, status: 'delivered' },
+      { id: 'UM-4820', orderNumber: 'UM-4820', customer: 'Jane Smith', amount: 349, status: 'shipped' },
+      { id: 'UM-4819', orderNumber: 'UM-4819', customer: 'Bob Johnson', amount: 749, status: 'processing' },
+      { id: 'UM-4818', orderNumber: 'UM-4818', customer: 'Alice Brown', amount: 1299, status: 'delivered' },
+      { id: 'UM-4817', orderNumber: 'UM-4817', customer: 'Charlie Wilson', amount: 249, status: 'cancelled' },
+    ];
+  },
+
+  // Get conversion funnel
+  getConversionFunnel: async (timeRange) => {
+    await delay(150);
+    return [
+      { stage: 'Visitors', count: 50000 },
+      { stage: 'Product Views', count: 35000 },
+      { stage: 'Add to Cart', count: 12000 },
+      { stage: 'Checkout', count: 5000 },
+      { stage: 'Purchase', count: 1900 },
+    ];
+  },
+
+  // Get real-time visitors
+  getRealtimeVisitors: async () => {
+    await delay(50);
+    return Math.floor(Math.random() * 50) + 10; // 10-60 visitors
+  },
+
+  // Legacy method for backward compatibility
+  getGeoData: async (timeRange) => {
+    console.warn('getGeoData is deprecated, use getGeoDistribution instead');
+    return dashboardApi.getGeoDistribution(timeRange);
+  },
+
+  // Original methods kept for backward compatibility
   getStats: async () => {
     await delay(300);
+    const orders = getStore("unimart_orders", SEED_ORDERS);
+    const totalRevenue = orders.reduce((sum, order) => sum + order.amount, 0);
+    
     return {
-      revenue: { value: 84254, change: 12.5, positive: true, spark: [30,45,38,60,55,72,84,78,92,88,95,84] },
-      orders: { value: 3842, change: 8.2, positive: true, spark: [20,35,28,50,45,62,58,70,65,78,72,84] },
+      revenue: { value: totalRevenue || 84254, change: 12.5, positive: true, spark: [30,45,38,60,55,72,84,78,92,88,95,84] },
+      orders: { value: orders.length || 3842, change: 8.2, positive: true, spark: [20,35,28,50,45,62,58,70,65,78,72,84] },
       products: { value: 1294, change: -2.1, positive: false, spark: [80,75,82,78,70,72,68,72,69,71,73,70] },
       users: { value: 12543, change: 18.7, positive: true, spark: [40,55,48,70,65,82,78,90,85,98,92,105] },
     };
@@ -296,27 +613,6 @@ export const dashboardApi = {
       { name: "Accessories", value: 14, color: "#f59e0b" },
       { name: "Others", value: 10, color: "#ec4899" },
     ];
-  },
-
-  getTopProducts: async () => {
-    await delay(150);
-    const data = getStore("unimart_products", SEED_PRODUCTS);
-    return data
-      .sort((a, b) => b.sales - a.sales)
-      .slice(0, 5)
-      .map((p) => ({
-        name: p.name,
-        sales: p.sales,
-        revenue: p.price * p.sales,
-        image: p.image,
-        pct: Math.round((p.sales / 1204) * 100),
-      }));
-  },
-
-  getRecentOrders: async () => {
-    await delay(150);
-    const data = getStore("unimart_orders", SEED_ORDERS);
-    return data.slice(0, 6);
   },
 };
 
@@ -381,4 +677,14 @@ export const notificationsApi = {
     await delay(100);
     return { success: true };
   },
+};
+
+// Default export for backward compatibility
+export default {
+  productsApi,
+  usersApi,
+  ordersApi,
+  dashboardApi,
+  settingsApi,
+  notificationsApi,
 };
