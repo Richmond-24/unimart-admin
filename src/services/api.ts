@@ -1,5 +1,4 @@
 
-/// <reference types="vite/client" />
 // src/services/api.ts
 // ─── Single source of truth for all backend API calls ─────────────────────
 
