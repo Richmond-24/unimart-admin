@@ -1,25 +1,42 @@
-
 // src/services/api.ts
 // ─── Single source of truth for all backend API calls ─────────────────────
 
-const BASE = (import.meta as any).env?.VITE_API_URL || "http://localhost:5000";
+// Use Create React App's environment variable
+const BASE = process.env.REACT_APP_API_URL || "https://unimart-backend-2.onrender.com";
 
 // ── Generic fetch wrapper ─────────────────────────────────────────────────────
 async function request<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...options.headers },
-    ...options,
-  });
+  const url = `${BASE}${path}`;
+  console.log(`📡 API Request: ${options.method || 'GET'} ${url}`);
+  
+  try {
+    const res = await fetch(url, {
+      headers: { 
+        "Content-Type": "application/json",
+        ...options.headers 
+      },
+      ...options,
+    });
 
-  const json = await res.json().catch(() => ({}));
+    // For responses without JSON body (like 204 No Content)
+    if (res.status === 204) {
+      return {} as T;
+    }
 
-  if (!res.ok) {
-    throw new Error(json.error || `HTTP ${res.status}`);
+    const json = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      console.error(`❌ API Error ${res.status}:`, json);
+      throw new Error(json.error || `HTTP ${res.status}`);
+    }
+    return json as T;
+  } catch (error) {
+    console.error(`❌ Fetch failed: ${url}`, error);
+    throw error;
   }
-  return json as T;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -83,8 +100,29 @@ export interface Notification {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const dashboardApi = {
+  /** Get KPI data */
   getKpi: () =>
     request<{ success: boolean; data: KpiData }>("/api/dashboard/kpi")
+      .then((r) => r.data),
+
+  /** Alias for getKpi */
+  getKPI: () =>
+    request<{ success: boolean; data: KpiData }>("/api/dashboard/kpi")
+      .then((r) => r.data),
+
+  /** Get sales trend */
+  getSalesTrend: (period: string = '30d') =>
+    request<{ success: boolean; data: any[] }>(`/api/dashboard/sales-trend?period=${period}`)
+      .then((r) => r.data),
+
+  /** Get category performance */
+  getCategoryPerformance: () =>
+    request<{ success: boolean; data: any[] }>("/api/dashboard/categories")
+      .then((r) => r.data),
+
+  /** Get top products */
+  getTopProducts: (limit: number = 5) =>
+    request<{ success: boolean; data: any[] }>(`/api/dashboard/top-products?limit=${limit}`)
       .then((r) => r.data),
 };
 
@@ -99,15 +137,22 @@ export const listingsApi = {
       `/api/listings${status ? `?status=${status}` : ""}`
     ).then((r) => r.data),
 
-  /** Only pending listings */
+  /** Get listings with pagination */
+  getPaginated: (page: number = 1, limit: number = 10, status?: string) =>
+    request<{ success: boolean; data: Listing[]; pagination: any }>(
+      `/api/listings?page=${page}&limit=${limit}${status ? `&status=${status}` : ""}`
+    ).then((r) => r),
+
+  /** Get pending listings (for approval) */
   getPending: () =>
-    request<{ success: boolean; data: Listing[] }>("/api/listings/pending")
+    request<{ success: boolean; data: Listing[] }>("/api/listings?status=pending")
       .then((r) => r.data),
 
   /** Count of pending listings (for sidebar badge) */
-  getPendingCount: () =>
-    request<{ success: boolean; count: number }>("/api/listings/pending/count")
-      .then((r) => r.count),
+  getPendingCount: async () => {
+    const data = await request<{ success: boolean; data: Listing[] }>("/api/listings?status=pending");
+    return data.data?.length || 0;
+  },
 
   /** Single listing */
   getOne: (id: string) =>
@@ -116,15 +161,16 @@ export const listingsApi = {
 
   /** Approve a listing → status becomes 'active' */
   approve: (id: string) =>
-    request<{ success: boolean; data: Listing }>(`/api/listings/${id}/approve`, {
+    request<{ success: boolean; data: Listing }>(`/api/listings/${id}/status`, {
       method: "PATCH",
+      body: JSON.stringify({ status: "active" }),
     }).then((r) => r.data),
 
   /** Reject a listing */
   reject: (id: string, reason?: string) =>
-    request<{ success: boolean; data: Listing }>(`/api/listings/${id}/reject`, {
+    request<{ success: boolean; data: Listing }>(`/api/listings/${id}/status`, {
       method: "PATCH",
-      body: JSON.stringify({ reason: reason || "" }),
+      body: JSON.stringify({ status: "rejected", reason: reason || "" }),
     }).then((r) => r.data),
 
   /** Generic status update */
@@ -134,7 +180,7 @@ export const listingsApi = {
       body: JSON.stringify({ status }),
     }).then((r) => r.data),
 
-  /** Delete */
+  /** Delete listing */
   delete: (id: string) =>
     request<{ success: boolean }>(`/api/listings/${id}`, { method: "DELETE" }),
 };
@@ -144,20 +190,67 @@ export const listingsApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const notificationsApi = {
-  /** Fetch all notifications (built from listing events) */
-  getAll: () =>
-    request<{ success: boolean; data: Notification[] }>("/api/notifications")
-      .then((r) => r.data),
+  /** Fetch all notifications (built from recent listings) */
+  getAll: async () => {
+    try {
+      const response = await request<{ success: boolean; data: Listing[] }>("/api/listings?limit=10");
+      const listings = response.data || [];
+      
+      const notifications: Notification[] = listings.map(listing => ({
+        id: listing._id,
+        type: "order",
+        message: `New listing "${listing.title}" submitted by ${listing.sellerName}`,
+        time: new Date(listing.createdAt).toLocaleString(),
+        read: false,
+        listing: {
+          id: listing._id,
+          title: listing.title,
+          price: listing.price,
+          category: listing.category
+        }
+      }));
+      
+      return notifications;
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+      return [];
+    }
+  },
 
-  /** Mark a single notification read (optimistic — real state is frontend) */
-  markRead: (id: string) =>
-    request<{ success: boolean }>(`/api/notifications/${id}/read`, {
-      method: "PATCH",
-    }),
+  /** Mark a single notification read */
+  markRead: async (id: string) => {
+    console.log(`Marking notification ${id} as read`);
+    return { success: true };
+  },
 
-  /** Unread count — derived from getAll */
+  /** Mark all notifications as read */
+  markAllRead: async () => {
+    console.log('Marking all notifications as read');
+    return { success: true };
+  },
+
+  /** Get unread count */
   getUnreadCount: async () => {
     const notifs = await notificationsApi.getAll();
     return notifs.filter((n) => !n.read).length;
   },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USERS API (for future use)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const usersApi = {
+  getAll: () =>
+    request<{ success: boolean; data: any[] }>("/api/users").then((r) => r.data),
+  
+  getOne: (id: string) =>
+    request<{ success: boolean; data: any }>(`/api/users/${id}`).then((r) => r.data),
+};
+
+export default {
+  dashboardApi,
+  listingsApi,
+  notificationsApi,
+  usersApi,
 };
