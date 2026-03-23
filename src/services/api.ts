@@ -2,7 +2,7 @@
 // ─── Single source of truth for all backend API calls ─────────────────────
 
 // Use Create React App's environment variable
-const BASE = process.env.REACT_APP_API_URL || "https://unimart-backend-2.onrender.com";
+const BASE = process.env. NEXT_PUBLIC_API_URL|| "https://unimart-backend-2.onrender.com";
 
 // ── Generic fetch wrapper ─────────────────────────────────────────────────────
 async function request<T>(
