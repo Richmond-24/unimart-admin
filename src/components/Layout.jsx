@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { listingsApi, notificationsApi, dashboardApi } from "../services/api.ts";
+import { listingsApi, notificationsApi, dashboardApi } from "../services/api";
 
 // ── Uni-Mart Brand Colors ─────────────────────────────────────────────────────
 const C = {
@@ -348,12 +348,14 @@ export default function Layout() {
         className="flex items-center gap-3 px-4 py-5 border-b flex-shrink-0"
         style={{ borderColor: C.border }}
       >
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-base flex-shrink-0"
-          style={{ background: `linear-gradient(135deg, #FF8A3C, ${C.orange})` }}
-        >
-          U
-        </div>
+         {/* Logo + brand */}
+        <div className="text-center mb-8">
+          <img 
+            src="/logo.png" 
+            alt="Uni-Mart Logo"
+            className="w-10 h-10 rounded-2xl  mb-2 shadow-lg shadow-orange-200 object-cover"
+          />
+          </div>
         {(!collapsed || sidebarOpen) && (
           <div className="flex-1 min-w-0">
             <span className="font-black text-base tracking-tight block" style={{ color: C.text }}>Uni-Mart</span>

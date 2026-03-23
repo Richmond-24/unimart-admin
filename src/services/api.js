@@ -1,15 +1,12 @@
 
-// src/services/api.ts
+// src/services/api.js
 // ─── Single source of truth for all backend API calls ─────────────────────
 
 // Production backend URL
 const BASE = "https://unimart-backend-2.onrender.com";
 
 // ── Generic fetch wrapper ─────────────────────────────────────────────────────
-async function request<T>(
-  path: string,
-  options: RequestInit = {}
-): Promise<T> {
+async function request(path, options = {}) {
   const url = `${BASE}${path}`;
   console.log(`📡 API Request: ${options.method || 'GET'} ${url}`);
   
@@ -23,7 +20,7 @@ async function request<T>(
     });
 
     if (res.status === 204) {
-      return {} as T;
+      return {};
     }
 
     const json = await res.json().catch(() => ({}));
@@ -32,56 +29,11 @@ async function request<T>(
       console.error(`❌ API Error ${res.status}:`, json);
       throw new Error(json.error || `HTTP ${res.status}`);
     }
-    return json as T;
+    return json;
   } catch (error) {
     console.error(`❌ Fetch failed: ${url}`, error);
     throw error;
   }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TYPES
-// ─────────────────────────────────────────────────────────────────────────────
-
-export interface Listing {
-  _id:               string;
-  title:             string;
-  description:       string;
-  category:          string;
-  brand?:            string;
-  condition:         string;
-  conditionNotes?:   string;
-  price:             number;
-  discount?:         number;
-  edition?:          string;
-  sellerName:        string;
-  sellerEmail:       string;
-  sellerPhone?:      string;
-  location?:         string;
-  userType:          "student" | "vendor";
-  deliveryType:      "self" | "unimart";
-  paymentMethod:     string;
-  tags:              string[];
-  imageUrls:         string[];
-  status:            "pending" | "active" | "sold" | "archived" | "rejected";
-  isActive:          boolean;
-  views:             number;
-  sales:             number;
-  confidence?:       number;
-  authenticityScore?: number;
-  isFake?:           boolean;
-  fakeDetectionNotes?: string;
-  createdAt:         string;
-  updatedAt:         string;
-}
-
-export interface DashboardData {
-  totalListings:    number;
-  pendingListings:  number;
-  activeListings:   number;
-  soldListings:     number;
-  rejectedListings: number;
-  recentListings:   Listing[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -90,12 +42,10 @@ export interface DashboardData {
 
 export const dashboardApi = {
   /** Get KPI data from actual listings */
-  getKpi: async (): Promise<DashboardData> => {
+  getKpi: async () => {
     try {
-      // Fetch all listings
       const listings = await listingsApi.getAll();
       
-      // Calculate KPIs from the data
       const totalListings = listings.length;
       const pendingListings = listings.filter(l => l.status === 'pending').length;
       const activeListings = listings.filter(l => l.status === 'active').length;
@@ -125,16 +75,17 @@ export const dashboardApi = {
   },
 
   /** Alias for getKpi */
-  getKPI: () => dashboardApi.getKpi(),
+  getKPI: function() {
+    return this.getKpi();
+  },
 
   /** Get sales trend (calculated from listing dates) */
-  getSalesTrend: async (period: string = '30d'): Promise<any[]> => {
+  getSalesTrend: async (period = '30d') => {
     try {
       const listings = await listingsApi.getAll();
       const activeListings = listings.filter(l => l.status === 'active');
       
-      // Group by date
-      const salesByDate: Record<string, number> = {};
+      const salesByDate = {};
       const now = new Date();
       const daysToSubtract = period === '7d' ? 7 : period === '30d' ? 30 : 90;
       const cutoffDate = new Date(now.setDate(now.getDate() - daysToSubtract));
@@ -159,10 +110,10 @@ export const dashboardApi = {
   },
 
   /** Get category performance */
-  getCategoryPerformance: async (): Promise<any[]> => {
+  getCategoryPerformance: async () => {
     try {
       const listings = await listingsApi.getAll();
-      const categoryMap: Record<string, { count: number; revenue: number }> = {};
+      const categoryMap = {};
       
       listings.forEach(listing => {
         const cat = listing.category || 'Other';
@@ -176,7 +127,7 @@ export const dashboardApi = {
       const colors = ['#FF6A00', '#10B981', '#3B82F6', '#8B5CF6', '#EF4444', '#F59E0B'];
       
       return Object.entries(categoryMap).map(([name, data], index) => ({
-        name,
+        name: name,
         value: data.count,
         count: data.count,
         revenue: data.revenue,
@@ -189,7 +140,7 @@ export const dashboardApi = {
   },
 
   /** Get top products */
-  getTopProducts: async (limit: number = 5): Promise<any[]> => {
+  getTopProducts: async (limit = 5) => {
     try {
       const listings = await listingsApi.getAll();
       return listings
@@ -200,7 +151,7 @@ export const dashboardApi = {
           category: listing.category,
           price: listing.price,
           views: listing.views || 0,
-          image: listing.imageUrls?.[0] || null
+          image: listing.imageUrls && listing.imageUrls[0] ? listing.imageUrls[0] : null
         }));
     } catch (error) {
       console.error('Error fetching top products:', error);
@@ -209,10 +160,10 @@ export const dashboardApi = {
   },
 
   /** Get geo distribution (from location data) */
-  getGeoDistribution: async (): Promise<any[]> => {
+  getGeoDistribution: async () => {
     try {
       const listings = await listingsApi.getAll();
-      const locationMap: Record<string, number> = {};
+      const locationMap = {};
       
       listings.forEach(listing => {
         if (listing.location) {
@@ -222,7 +173,7 @@ export const dashboardApi = {
       });
       
       return Object.entries(locationMap)
-        .map(([name, count]) => ({ name, count }))
+        .map(([name, count]) => ({ name: name, count: count }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);
     } catch (error) {
@@ -238,11 +189,10 @@ export const dashboardApi = {
 
 export const listingsApi = {
   /** All listings — optionally filter by status */
-  getAll: async (status?: string): Promise<Listing[]> => {
+  getAll: async (status) => {
     try {
-      const data = await request<{ success: boolean; data: Listing[] }>(
-        `/api/listings${status ? `?status=${status}` : ""}`
-      );
+      const url = status ? `/api/listings?status=${status}` : "/api/listings";
+      const data = await request(url);
       return data.data || [];
     } catch (error) {
       console.error('Error fetching listings:', error);
@@ -251,45 +201,57 @@ export const listingsApi = {
   },
 
   /** Get pending listings (for approval) */
-  getPending: async (): Promise<Listing[]> => {
-    return listingsApi.getAll('pending');
+  getPending: async function() {
+    return this.getAll('pending');
   },
 
   /** Count of pending listings (for sidebar badge) */
-  getPendingCount: async (): Promise<number> => {
-    const pending = await listingsApi.getAll('pending');
+  getPendingCount: async function() {
+    const pending = await this.getAll('pending');
     return pending.length;
   },
 
   /** Single listing */
-  getOne: (id: string) =>
-    request<{ success: boolean; data: Listing }>(`/api/listings/${id}`)
-      .then((r) => r.data),
+  getOne: function(id) {
+    return request(`/api/listings/${id}`).then(function(r) {
+      return r.data;
+    });
+  },
 
   /** Approve a listing → status becomes 'active' */
-  approve: (id: string) =>
-    request<{ success: boolean; data: Listing }>(`/api/listings/${id}/status`, {
+  approve: function(id) {
+    return request(`/api/listings/${id}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status: "active" }),
-    }).then((r) => r.data),
+    }).then(function(r) {
+      return r.data;
+    });
+  },
 
   /** Reject a listing */
-  reject: (id: string, reason?: string) =>
-    request<{ success: boolean; data: Listing }>(`/api/listings/${id}/status`, {
+  reject: function(id, reason) {
+    return request(`/api/listings/${id}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status: "rejected", reason: reason || "" }),
-    }).then((r) => r.data),
+    }).then(function(r) {
+      return r.data;
+    });
+  },
 
   /** Generic status update */
-  updateStatus: (id: string, status: Listing["status"]) =>
-    request<{ success: boolean; data: Listing }>(`/api/listings/${id}/status`, {
+  updateStatus: function(id, status) {
+    return request(`/api/listings/${id}/status`, {
       method: "PATCH",
-      body: JSON.stringify({ status }),
-    }).then((r) => r.data),
+      body: JSON.stringify({ status: status }),
+    }).then(function(r) {
+      return r.data;
+    });
+  },
 
   /** Delete listing */
-  delete: (id: string) =>
-    request<{ success: boolean }>(`/api/listings/${id}`, { method: "DELETE" }),
+  delete: function(id) {
+    return request(`/api/listings/${id}`, { method: "DELETE" });
+  }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -325,7 +287,7 @@ export const notificationsApi = {
   },
 
   /** Mark a single notification read */
-  markRead: async (id: string) => {
+  markRead: async (id) => {
     console.log(`Marking notification ${id} as read`);
     return { success: true };
   },
@@ -339,8 +301,10 @@ export const notificationsApi = {
   /** Get unread count */
   getUnreadCount: async () => {
     const notifs = await notificationsApi.getAll();
-    return notifs.filter((n) => !n.read).length;
-  },
+    return notifs.filter(function(n) {
+      return !n.read;
+    }).length;
+  }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -348,11 +312,17 @@ export const notificationsApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const usersApi = {
-  getAll: () =>
-    request<{ success: boolean; data: any[] }>("/api/users").then((r) => r.data),
+  getAll: function() {
+    return request("/api/users").then(function(r) {
+      return r.data;
+    });
+  },
   
-  getOne: (id: string) =>
-    request<{ success: boolean; data: any }>(`/api/users/${id}`).then((r) => r.data),
+  getOne: function(id) {
+    return request(`/api/users/${id}`).then(function(r) {
+      return r.data;
+    });
+  }
 };
 
 export default {

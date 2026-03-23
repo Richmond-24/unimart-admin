@@ -1,7 +1,6 @@
 
 // src/pages/Dashboard.tsx (or wherever your Dashboard component is)
 import React, { useState, useEffect } from 'react';
-import { dashboardApi, listingsApi } from '../services/api';
 
 export default function Dashboard() {
   const [kpi, setKpi] = useState({
