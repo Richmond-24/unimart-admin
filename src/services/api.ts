@@ -1,8 +1,9 @@
+
 // src/services/api.ts
 // ─── Single source of truth for all backend API calls ─────────────────────
 
-// Use Create React App's environment variable
-const BASE = process.env. NEXT_PUBLIC_API_URL|| "https://unimart-backend-2.onrender.com";
+// Production backend URL
+const BASE = "https://unimart-backend-2.onrender.com";
 
 // ── Generic fetch wrapper ─────────────────────────────────────────────────────
 async function request<T>(
@@ -21,7 +22,6 @@ async function request<T>(
       ...options,
     });
 
-    // For responses without JSON body (like 204 No Content)
     if (res.status === 204) {
       return {} as T;
     }
@@ -75,55 +75,161 @@ export interface Listing {
   updatedAt:         string;
 }
 
-export interface KpiData {
+export interface DashboardData {
   totalListings:    number;
   pendingListings:  number;
   activeListings:   number;
   soldListings:     number;
   rejectedListings: number;
-  recentListings:   { _id: string; count: number }[];
-  topCategories:    { _id: string; count: number }[];
-  recentActivity:   Partial<Listing>[];
-}
-
-export interface Notification {
-  id:      string;
-  type:    "order" | "product" | "user";
-  message: string;
-  time:    string;
-  read:    boolean;
-  listing?: { id: string; title: string; price: number; category: string };
+  recentListings:   Listing[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DASHBOARD API
+// DASHBOARD API (Using real endpoints)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const dashboardApi = {
-  /** Get KPI data */
-  getKpi: () =>
-    request<{ success: boolean; data: KpiData }>("/api/dashboard/kpi")
-      .then((r) => r.data),
+  /** Get KPI data from actual listings */
+  getKpi: async (): Promise<DashboardData> => {
+    try {
+      // Fetch all listings
+      const listings = await listingsApi.getAll();
+      
+      // Calculate KPIs from the data
+      const totalListings = listings.length;
+      const pendingListings = listings.filter(l => l.status === 'pending').length;
+      const activeListings = listings.filter(l => l.status === 'active').length;
+      const soldListings = listings.filter(l => l.status === 'sold').length;
+      const rejectedListings = listings.filter(l => l.status === 'rejected').length;
+      const recentListings = listings.slice(0, 5);
+      
+      return {
+        totalListings,
+        pendingListings,
+        activeListings,
+        soldListings,
+        rejectedListings,
+        recentListings
+      };
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      return {
+        totalListings: 0,
+        pendingListings: 0,
+        activeListings: 0,
+        soldListings: 0,
+        rejectedListings: 0,
+        recentListings: []
+      };
+    }
+  },
 
   /** Alias for getKpi */
-  getKPI: () =>
-    request<{ success: boolean; data: KpiData }>("/api/dashboard/kpi")
-      .then((r) => r.data),
+  getKPI: () => dashboardApi.getKpi(),
 
-  /** Get sales trend */
-  getSalesTrend: (period: string = '30d') =>
-    request<{ success: boolean; data: any[] }>(`/api/dashboard/sales-trend?period=${period}`)
-      .then((r) => r.data),
+  /** Get sales trend (calculated from listing dates) */
+  getSalesTrend: async (period: string = '30d'): Promise<any[]> => {
+    try {
+      const listings = await listingsApi.getAll();
+      const activeListings = listings.filter(l => l.status === 'active');
+      
+      // Group by date
+      const salesByDate: Record<string, number> = {};
+      const now = new Date();
+      const daysToSubtract = period === '7d' ? 7 : period === '30d' ? 30 : 90;
+      const cutoffDate = new Date(now.setDate(now.getDate() - daysToSubtract));
+      
+      activeListings.forEach(listing => {
+        const date = new Date(listing.createdAt);
+        if (date >= cutoffDate) {
+          const dateKey = date.toLocaleDateString();
+          salesByDate[dateKey] = (salesByDate[dateKey] || 0) + listing.price;
+        }
+      });
+      
+      return Object.entries(salesByDate).map(([date, revenue]) => ({
+        date,
+        revenue,
+        orders: 1
+      }));
+    } catch (error) {
+      console.error('Error fetching sales trend:', error);
+      return [];
+    }
+  },
 
   /** Get category performance */
-  getCategoryPerformance: () =>
-    request<{ success: boolean; data: any[] }>("/api/dashboard/categories")
-      .then((r) => r.data),
+  getCategoryPerformance: async (): Promise<any[]> => {
+    try {
+      const listings = await listingsApi.getAll();
+      const categoryMap: Record<string, { count: number; revenue: number }> = {};
+      
+      listings.forEach(listing => {
+        const cat = listing.category || 'Other';
+        if (!categoryMap[cat]) {
+          categoryMap[cat] = { count: 0, revenue: 0 };
+        }
+        categoryMap[cat].count++;
+        categoryMap[cat].revenue += listing.price;
+      });
+      
+      const colors = ['#FF6A00', '#10B981', '#3B82F6', '#8B5CF6', '#EF4444', '#F59E0B'];
+      
+      return Object.entries(categoryMap).map(([name, data], index) => ({
+        name,
+        value: data.count,
+        count: data.count,
+        revenue: data.revenue,
+        color: colors[index % colors.length]
+      }));
+    } catch (error) {
+      console.error('Error fetching category performance:', error);
+      return [];
+    }
+  },
 
   /** Get top products */
-  getTopProducts: (limit: number = 5) =>
-    request<{ success: boolean; data: any[] }>(`/api/dashboard/top-products?limit=${limit}`)
-      .then((r) => r.data),
+  getTopProducts: async (limit: number = 5): Promise<any[]> => {
+    try {
+      const listings = await listingsApi.getAll();
+      return listings
+        .sort((a, b) => b.views - a.views)
+        .slice(0, limit)
+        .map(listing => ({
+          name: listing.title,
+          category: listing.category,
+          price: listing.price,
+          views: listing.views || 0,
+          image: listing.imageUrls?.[0] || null
+        }));
+    } catch (error) {
+      console.error('Error fetching top products:', error);
+      return [];
+    }
+  },
+
+  /** Get geo distribution (from location data) */
+  getGeoDistribution: async (): Promise<any[]> => {
+    try {
+      const listings = await listingsApi.getAll();
+      const locationMap: Record<string, number> = {};
+      
+      listings.forEach(listing => {
+        if (listing.location) {
+          const mainLocation = listing.location.split(',')[0].trim();
+          locationMap[mainLocation] = (locationMap[mainLocation] || 0) + 1;
+        }
+      });
+      
+      return Object.entries(locationMap)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+    } catch (error) {
+      console.error('Error fetching geo distribution:', error);
+      return [];
+    }
+  }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -132,26 +238,27 @@ export const dashboardApi = {
 
 export const listingsApi = {
   /** All listings — optionally filter by status */
-  getAll: (status?: string) =>
-    request<{ success: boolean; data: Listing[] }>(
-      `/api/listings${status ? `?status=${status}` : ""}`
-    ).then((r) => r.data),
-
-  /** Get listings with pagination */
-  getPaginated: (page: number = 1, limit: number = 10, status?: string) =>
-    request<{ success: boolean; data: Listing[]; pagination: any }>(
-      `/api/listings?page=${page}&limit=${limit}${status ? `&status=${status}` : ""}`
-    ).then((r) => r),
+  getAll: async (status?: string): Promise<Listing[]> => {
+    try {
+      const data = await request<{ success: boolean; data: Listing[] }>(
+        `/api/listings${status ? `?status=${status}` : ""}`
+      );
+      return data.data || [];
+    } catch (error) {
+      console.error('Error fetching listings:', error);
+      return [];
+    }
+  },
 
   /** Get pending listings (for approval) */
-  getPending: () =>
-    request<{ success: boolean; data: Listing[] }>("/api/listings?status=pending")
-      .then((r) => r.data),
+  getPending: async (): Promise<Listing[]> => {
+    return listingsApi.getAll('pending');
+  },
 
   /** Count of pending listings (for sidebar badge) */
-  getPendingCount: async () => {
-    const data = await request<{ success: boolean; data: Listing[] }>("/api/listings?status=pending");
-    return data.data?.length || 0;
+  getPendingCount: async (): Promise<number> => {
+    const pending = await listingsApi.getAll('pending');
+    return pending.length;
   },
 
   /** Single listing */
@@ -193,10 +300,10 @@ export const notificationsApi = {
   /** Fetch all notifications (built from recent listings) */
   getAll: async () => {
     try {
-      const response = await request<{ success: boolean; data: Listing[] }>("/api/listings?limit=10");
-      const listings = response.data || [];
+      const listings = await listingsApi.getAll();
+      const recentListings = listings.slice(0, 10);
       
-      const notifications: Notification[] = listings.map(listing => ({
+      const notifications = recentListings.map(listing => ({
         id: listing._id,
         type: "order",
         message: `New listing "${listing.title}" submitted by ${listing.sellerName}`,
